@@ -110,9 +110,7 @@
         if (!inner || inner === contentEl || !article.contains(inner)) {
             return { headerEls: [], footerEls: [] };
         }
-        const sibs = Array.from(inner.children).filter(
-            (c) => c !== indicator && c !== hint,
-        );
+        const sibs = Array.from(inner.children).filter((c) => !isOwnUi(c));
         const idx = sibs.indexOf(contentEl);
         return {
             headerEls: idx > 0 ? sibs.slice(0, idx) : [],
@@ -130,7 +128,7 @@
     function buildSlides() {
         // 自前で追加した UI(indicator / hint)は分割対象から除外する
         const children = Array.from(contentEl.children).filter(
-            (c) => c !== indicator && c !== hint,
+            (c) => !isOwnUi(c),
         );
 
         // h1〜h3 のいずれの見出しでもスライドを区切る
@@ -188,14 +186,136 @@
     };
 
     const indicator = document.createElement("div");
-    indicator.className = "bikkuri-indicator";
+    indicator.className = "bikkuri-indicator bikkuri-ui";
     indicator.style.display = "none";
     stageEl.appendChild(indicator);
 
     const hint = document.createElement("div");
-    hint.className = "bikkuri-hint bikkuri-hint-hide";
+    hint.className = "bikkuri-hint bikkuri-ui bikkuri-hint-hide";
     stageEl.appendChild(hint);
     let hintTimer = null;
+
+    /**
+     * 文字サイズ(ズーム)調整バー
+     * 記事の子要素に CSS zoom を当てて画面全体を拡大縮小する(自前 UI は対象外)。
+     * ブログ側 CSS が px 指定でも効くよう font-size ではなく zoom を使う。
+     */
+    const ZOOM_MIN = 50;
+    const ZOOM_MAX = 250;
+    const ZOOM_STEP = 10;
+    let zoomPct = 100;
+
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    function magnifierIcon(plus) {
+        const svg = document.createElementNS(SVG_NS, "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        const d = [
+            "M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13z", // レンズ
+            "M15.5 15.5L20 20", // 柄
+            "M7.5 10.5h6", // −
+        ];
+        if (plus) d.push("M10.5 7.5v6"); // ＋の縦棒
+        for (const p of d) {
+            const path = document.createElementNS(SVG_NS, "path");
+            path.setAttribute("d", p);
+            svg.appendChild(path);
+        }
+        return svg;
+    }
+
+    const zoomBar = document.createElement("div");
+    zoomBar.className = "bikkuri-zoom bikkuri-ui";
+    zoomBar.style.display = "none";
+
+    const zoomAa = document.createElement("span");
+    zoomAa.className = "bikkuri-zoom-aa";
+    zoomAa.setAttribute("aria-hidden", "true");
+    zoomAa.textContent = "Aa";
+
+    const zoomOutBtn = document.createElement("button");
+    zoomOutBtn.type = "button";
+    zoomOutBtn.className = "bikkuri-zoom-btn";
+    zoomOutBtn.title = "文字を小さく (-)";
+    zoomOutBtn.setAttribute("aria-label", "文字を小さく");
+    zoomOutBtn.appendChild(magnifierIcon(false));
+
+    const zoomRange = document.createElement("input");
+    zoomRange.type = "range";
+    zoomRange.className = "bikkuri-zoom-range";
+    zoomRange.min = String(ZOOM_MIN);
+    zoomRange.max = String(ZOOM_MAX);
+    zoomRange.step = "5";
+    zoomRange.value = "100";
+    zoomRange.setAttribute("aria-label", "文字サイズ");
+
+    const zoomInBtn = document.createElement("button");
+    zoomInBtn.type = "button";
+    zoomInBtn.className = "bikkuri-zoom-btn";
+    zoomInBtn.title = "文字を大きく (+)";
+    zoomInBtn.setAttribute("aria-label", "文字を大きく");
+    zoomInBtn.appendChild(magnifierIcon(true));
+
+    const zoomValue = document.createElement("button");
+    zoomValue.type = "button";
+    zoomValue.className = "bikkuri-zoom-value";
+    zoomValue.title = "クリックで 100% に戻す (0)";
+    zoomValue.textContent = "100%";
+
+    zoomBar.append(zoomAa, zoomOutBtn, zoomRange, zoomInBtn, zoomValue);
+    stageEl.appendChild(zoomBar);
+
+    function setZoom(pct) {
+        zoomPct = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(pct)));
+        stageEl.style.setProperty("--bikkuri-zoom", String(zoomPct / 100));
+        zoomRange.value = String(zoomPct);
+        zoomValue.textContent = `${zoomPct}%`;
+        if (state.phase === "presenting") revealZoomBar();
+        // つまみ位置までのトラックを塗るための割合
+        zoomRange.style.setProperty(
+            "--bikkuri-zoom-fill",
+            `${((zoomPct - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)) * 100}%`,
+        );
+    }
+
+    zoomRange.addEventListener("input", () => setZoom(Number(zoomRange.value)));
+    zoomOutBtn.addEventListener("click", () => setZoom(zoomPct - ZOOM_STEP));
+    zoomInBtn.addEventListener("click", () => setZoom(zoomPct + ZOOM_STEP));
+    zoomValue.addEventListener("click", () => setZoom(100));
+    // マウス操作後はフォーカスを外し、←→ キーがスライド送りに戻るようにする
+    zoomBar.addEventListener("pointerup", () => {
+        setTimeout(() => {
+            if (zoomBar.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+        }, 0);
+    });
+    setZoom(100);
+
+    // 普段は隠し、マウスを動かしたときだけ一定時間表示する(コンテンツと重ならないように)
+    const ZOOM_BAR_HIDE_MS = 2500;
+    let zoomBarTimer = null;
+    function revealZoomBar() {
+        zoomBar.classList.add("bikkuri-zoom-show");
+        clearTimeout(zoomBarTimer);
+        zoomBarTimer = setTimeout(hideZoomBarIfIdle, ZOOM_BAR_HIDE_MS);
+    }
+    function hideZoomBarIfIdle() {
+        // ホバー中・フォーカス中は消さずに様子見を続ける
+        if (zoomBar.matches(":hover, :focus-within")) {
+            zoomBarTimer = setTimeout(hideZoomBarIfIdle, ZOOM_BAR_HIDE_MS);
+            return;
+        }
+        zoomBar.classList.remove("bikkuri-zoom-show");
+    }
+    function onMouseMove() {
+        if (state.phase === "presenting") revealZoomBar();
+    }
+
+    /** 自前で追加した UI 要素か(スライド分割・ズームの対象外にする) */
+    function isOwnUi(el) {
+        return el.classList.contains("bikkuri-ui");
+    }
 
     function refreshHint(text) {
         clearTimeout(hintTimer);
@@ -224,7 +344,7 @@
 
         // 本文コンテナの子：現在スライドの要素だけ表示
         for (const child of contentEl.children) {
-            if (child === indicator || child === hint) continue;
+            if (isOwnUi(child)) continue;
             child.classList.toggle("bikkuri-slide-off", !visible.has(child));
         }
         // 本文コンテナ自体：表示する内容が無ければ隠す(タイトルのみのスライド等)
@@ -301,6 +421,14 @@
             return;
         }
 
+        // ズームバーにキーボードフォーカスがある間は矢印キー等をスライダーに任せる
+        if (
+            zoomBar.contains(e.target) &&
+            /^(Arrow|Page|Home$|End$| $|Enter$)/.test(k)
+        ) {
+            return;
+        }
+
         if (k === "Escape") {
             if (document.fullscreenElement) {
                 document.exitFullscreen().catch(() => {});
@@ -324,6 +452,21 @@
             case "r":
             case "R":
                 enterReader();
+                e.preventDefault();
+                break;
+            case "+":
+            case "=":
+            case ";": // JIS 配列で Shift なしの「+」キー
+                setZoom(zoomPct + ZOOM_STEP);
+                e.preventDefault();
+                break;
+            case "-":
+            case "_":
+                setZoom(zoomPct - ZOOM_STEP);
+                e.preventDefault();
+                break;
+            case "0":
+                setZoom(100);
                 e.preventDefault();
                 break;
             case "ArrowRight":
@@ -370,6 +513,7 @@
 
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("fullscreenchange", onFsChange);
+    document.addEventListener("mousemove", onMouseMove);
 
     /**
      * 起動モーダル(表示モードの選択とキー操作の案内)
@@ -449,6 +593,7 @@
             ...keyRow(["←"], "前のスライド"),
             ...keyRow(["S"], "プレゼンモードへ切替"),
             ...keyRow(["R"], "リーダーモードへ切替"),
+            ...keyRow(["+", "-"], "文字サイズを拡大 / 縮小(0 で 100%)"),
             ...keyRow(["Esc", "F"], "全画面を終了して元のブログへ戻る"),
         ]);
         const keys = el("div", { className: "bikkuri-keys" }, [
@@ -511,6 +656,7 @@
         removeModal();
         declutter();
         state.phase = "presenting";
+        zoomBar.style.display = "";
         if (mode === "slide") enterSlide();
         else enterReader();
         enterFullscreen();
@@ -522,6 +668,8 @@
     function close() {
         document.removeEventListener("keydown", onKeyDown, true);
         document.removeEventListener("fullscreenchange", onFsChange);
+        document.removeEventListener("mousemove", onMouseMove);
+        clearTimeout(zoomBarTimer);
         clearTimeout(hintTimer);
 
         if (document.fullscreenElement)
@@ -532,7 +680,9 @@
         hiddenEls.forEach((el) => el.classList.remove("bikkuri-hidden"));
         stageEl.classList.remove("bikkuri-stage");
         stageEl.style.removeProperty("--bikkuri-bg");
+        stageEl.style.removeProperty("--bikkuri-zoom");
         indicator.remove();
+        zoomBar.remove();
         hint.remove();
 
         delete window.__bikkuriSlide;

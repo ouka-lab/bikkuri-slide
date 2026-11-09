@@ -236,3 +236,129 @@
 .bikkuri-btn-ghost:hover {
     background: #f0efe7;
 }
+
+/* 文字サイズ（ズーム）：記事側の要素だけを拡大縮小し、自前 UI は対象外 */
+.bikkuri-stage > :not(.bikkuri-ui) {
+    zoom: var(--bikkuri-zoom, 1);
+}
+
+/* 文字サイズ調整バー（左下）。普段は控えめに、ホバー／フォーカスで濃く表示 */
+.bikkuri-zoom {
+    position: fixed;
+    left: 16px;
+    bottom: 14px;
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 12px;
+    border-radius: 999px;
+    font:
+        600 13px/1 system-ui,
+        -apple-system,
+        "Hiragino Kaku Gothic ProN",
+        sans-serif;
+    color: #fff;
+    background: rgba(78, 68, 60, 0.85);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    user-select: none;
+}
+
+/* マウス移動・キー操作時だけ表示（JS でクラスを付け外しする） */
+.bikkuri-zoom.bikkuri-zoom-show,
+.bikkuri-zoom:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bikkuri-zoom-aa {
+    margin-right: 2px;
+    font:
+        700 17px/1 Georgia,
+        "Times New Roman",
+        serif;
+    letter-spacing: -0.02em;
+}
+
+.bikkuri-zoom-btn,
+.bikkuri-zoom-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.bikkuri-zoom-btn {
+    width: 26px;
+    height: 26px;
+}
+
+.bikkuri-zoom-btn:hover,
+.bikkuri-zoom-value:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.bikkuri-zoom-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.bikkuri-zoom-value {
+    min-width: 46px;
+    height: 26px;
+    padding: 0 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.bikkuri-zoom-btn:focus-visible,
+.bikkuri-zoom-value:focus-visible,
+.bikkuri-zoom-range:focus-visible {
+    outline: 2px solid #f14e32;
+    outline-offset: 2px;
+}
+
+.bikkuri-zoom-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 160px;
+    height: 4px;
+    margin: 0 2px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        #f14e32 var(--bikkuri-zoom-fill, 25%),
+        rgba(255, 255, 255, 0.35) var(--bikkuri-zoom-fill, 25%)
+    );
+    cursor: pointer;
+}
+
+.bikkuri-zoom-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #f14e32;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.bikkuri-zoom-range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #f14e32;
+    border-radius: 50%;
+    background: #fff;
+}
