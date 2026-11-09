@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "びっくりスライド",
-    "version": "0.1.1",
+    "version": "1.0.0",
     "description": "はてなブログなどの記事本文だけを抜き出し、モニター全体の全画面でプレゼンテーション表示する拡張機能。",
     "permissions": ["scripting", "activeTab"],
     "background": {
